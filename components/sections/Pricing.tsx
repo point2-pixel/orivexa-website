@@ -50,7 +50,7 @@ export function Pricing() {
                   </Button>
                 ) : (
                   <ButtonLink
-                    href="/dashboard"
+                    href="/signup"
                     variant={plan.highlighted ? "primary" : "secondary"}
                     size="md"
                     className="mt-7 w-full"

@@ -62,12 +62,12 @@ export function Navbar() {
 
           <div className="hidden items-center gap-3 lg:flex">
             <Link
-              href="#"
+              href="/login"
               className="rounded-lg px-4 py-2 text-sm text-muted transition-colors hover:text-white"
             >
               Sign in
             </Link>
-            <ButtonLink href="/dashboard" size="sm" className="group">
+            <ButtonLink href="/signup" size="sm" className="group">
               Get started
               <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
             </ButtonLink>
@@ -113,12 +113,13 @@ export function Navbar() {
                 ))}
                 <div className="mt-2 flex flex-col gap-2 border-t border-white/10 pt-4">
                   <Link
-                    href="#"
+                    href="/login"
+                    onClick={() => setMobileOpen(false)}
                     className="rounded-lg px-4 py-2.5 text-center text-sm text-muted hover:text-white"
                   >
                     Sign in
                   </Link>
-                  <ButtonLink href="/dashboard" size="md" className="w-full" onClick={() => setMobileOpen(false)}>
+                  <ButtonLink href="/signup" size="md" className="w-full" onClick={() => setMobileOpen(false)}>
                     Get started
                   </ButtonLink>
                 </div>

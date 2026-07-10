@@ -32,7 +32,7 @@ export function CTA() {
                 life in minutes. No credit card required.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <ButtonLink href="/dashboard" size="lg" className="group">
+                <ButtonLink href="/signup" size="lg" className="group">
                   Start building for free
                   <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </ButtonLink>

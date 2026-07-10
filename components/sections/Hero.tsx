@@ -93,8 +93,8 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center"
           >
-            <ButtonLink href="/dashboard" size="lg" className="group">
-              Try the live demo
+            <ButtonLink href="/signup" size="lg" className="group">
+              Start building for free
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </ButtonLink>
             <Button variant="secondary" size="lg" className="group">

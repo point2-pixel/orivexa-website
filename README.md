@@ -110,6 +110,59 @@ buttons) link into `/dashboard`. When you're ready to make this real, swap
 `lib/dashboard-data.ts` for actual API calls and wire up auth — the UI layer
 won't need to change.
 
+## Authentication & Backend (Supabase)
+
+Sign up, sign in, and the dashboard are now backed by real auth via
+[Supabase](https://supabase.com) (free tier is enough to start). Every new
+signup automatically gets a **profile** and a **workspace** row via a
+Postgres trigger — no manual setup per user.
+
+### 1. Create a Supabase project
+Go to [supabase.com](https://supabase.com) → New Project. Free tier is fine.
+
+### 2. Run the schema
+Open **SQL Editor → New query** in your Supabase project, paste the
+contents of `supabase/schema.sql`, and run it. This creates the `profiles`
+and `workspaces` tables, Row Level Security policies, and the
+`handle_new_user` trigger that auto-provisions a workspace on signup.
+
+### 3. Get your API keys
+**Project Settings → API** → copy the **Project URL** and the **anon /
+public** key (sometimes labeled "publishable").
+
+### 4. Set environment variables
+Copy `.env.local.example` to `.env.local` and fill in the two values:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+```
+
+Add the same two variables in **Vercel → Project → Settings → Environment
+Variables** for production, then redeploy.
+
+### 5. (Optional) Disable email confirmation for faster testing
+By default Supabase requires users to click a confirmation link before they
+can sign in. To skip this during development: **Authentication → Providers
+→ Email → toggle off "Confirm email"**. Turn it back on before launch.
+
+### How it fits together
+- `middleware.ts` + `lib/supabase/middleware.ts` — refreshes the session on
+  every request and redirects signed-out users away from `/dashboard`, and
+  signed-in users away from `/login` / `/signup`.
+- `lib/supabase/client.ts` — Supabase client for Client Components.
+- `lib/supabase/server.ts` — Supabase client for Server Components/Actions.
+- `lib/auth.ts` — `getCurrentUser()`, used by `app/dashboard/layout.tsx` to
+  load the signed-in user's name, email, and workspace.
+- `components/auth/` — `AuthShell`, `LoginForm`, `SignupForm`,
+  `SignOutButton`.
+- `app/auth/confirm/route.ts` — handles the email confirmation link.
+
+The dashboard's actual content (search results, documents, meetings,
+agents) is still mock data from `lib/dashboard-data.ts` — auth is real, the
+product data isn't yet. Swap that file for real queries against your own
+tables when you're ready.
+
 ## Content
 
 All copy lives in `lib/constants.ts`. Update company name, features,

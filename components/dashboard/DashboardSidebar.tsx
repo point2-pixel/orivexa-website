@@ -2,13 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles, Plus } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { DASHBOARD_NAV } from "@/lib/dashboard-nav";
 import { WORKSPACE_STATS } from "@/lib/dashboard-data";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { cn } from "@/lib/utils";
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  workspaceName: string;
+  userName: string;
+  userEmail: string;
+}
+
+export function DashboardSidebar({ workspaceName, userName, userEmail }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const initials = userName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-white/[0.07] bg-surface/60 backdrop-blur-xl lg:flex">
@@ -22,10 +35,9 @@ export function DashboardSidebar() {
       </Link>
 
       <div className="px-4">
-        <button className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-left text-sm text-white transition-colors hover:bg-white/[0.06]">
-          <span className="truncate font-medium">Acme Inc. workspace</span>
-          <Plus className="h-3.5 w-3.5 shrink-0 text-muted-2" />
-        </button>
+        <div className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
+          <span className="truncate text-left text-sm font-medium text-white">{workspaceName}</span>
+        </div>
       </div>
 
       <nav className="mt-6 flex-1 space-y-1 px-4" aria-label="Dashboard">
@@ -64,14 +76,17 @@ export function DashboardSidebar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 border-t border-white/[0.07] px-6 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent font-mono text-xs font-semibold text-white">
-          YO
+      <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] px-6 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent font-mono text-xs font-semibold text-white">
+            {initials || "U"}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-sm text-white">{userName}</div>
+            <div className="truncate text-xs text-muted-2">{userEmail}</div>
+          </div>
         </div>
-        <div className="min-w-0">
-          <div className="truncate text-sm text-white">You</div>
-          <div className="truncate text-xs text-muted-2">you@orivexia.space</div>
-        </div>
+        <SignOutButton className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-2 transition-colors hover:bg-white/[0.06] hover:text-white" />
       </div>
     </aside>
   );
