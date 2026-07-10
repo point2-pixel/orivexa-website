@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Container } from "@/components/ui/Container";
 import { GridBackground } from "@/components/ui/GridBackground";
 import { KnowledgeGraphVisual } from "@/components/ui/KnowledgeGraphVisual";
@@ -92,10 +93,10 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center"
           >
-            <Button size="lg" className="group">
-              Start building your graph
+            <ButtonLink href="/dashboard" size="lg" className="group">
+              Try the live demo
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </Button>
+            </ButtonLink>
             <Button variant="secondary" size="lg" className="group">
               <PlayCircle className="h-4 w-4 text-accent" />
               Watch demo

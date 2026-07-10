@@ -6,6 +6,7 @@ import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { StaggerGroup, StaggerItem } from "@/components/ui/ScrollReveal";
 import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { cn } from "@/lib/utils";
 
 export function Pricing() {
@@ -43,13 +44,20 @@ export function Pricing() {
                   <span className="text-sm text-muted-2">{plan.period}</span>
                 </div>
 
-                <Button
-                  variant={plan.highlighted ? "primary" : "secondary"}
-                  size="md"
-                  className="mt-7 w-full"
-                >
-                  {plan.cta}
-                </Button>
+                {plan.name === "Enterprise" ? (
+                  <Button variant="secondary" size="md" className="mt-7 w-full">
+                    {plan.cta}
+                  </Button>
+                ) : (
+                  <ButtonLink
+                    href="/dashboard"
+                    variant={plan.highlighted ? "primary" : "secondary"}
+                    size="md"
+                    className="mt-7 w-full"
+                  >
+                    {plan.cta}
+                  </ButtonLink>
+                )}
 
                 <ul className="mt-8 flex-1 space-y-3.5">
                   {plan.features.map((feature) => (

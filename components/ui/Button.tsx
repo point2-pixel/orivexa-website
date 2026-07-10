@@ -15,7 +15,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "sm" | "md" | "lg";
 }
 
-const variantStyles: Record<NonNullable<ButtonProps["variant"]>, string> = {
+export const buttonVariantStyles: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary:
     "bg-gradient-to-r from-primary to-secondary text-white shadow-glow-sm hover:shadow-glow hover:scale-[1.02] active:scale-[0.98]",
   secondary:
@@ -25,11 +25,14 @@ const variantStyles: Record<NonNullable<ButtonProps["variant"]>, string> = {
     "border border-white/15 text-white hover:border-accent/50 hover:bg-accent/[0.05]",
 };
 
-const sizeStyles: Record<NonNullable<ButtonProps["size"]>, string> = {
+export const buttonSizeStyles: Record<NonNullable<ButtonProps["size"]>, string> = {
   sm: "px-4 py-2 text-sm rounded-lg",
   md: "px-6 py-3 text-sm rounded-xl",
   lg: "px-8 py-4 text-base rounded-xl",
 };
+
+const variantStyles = buttonVariantStyles;
+const sizeStyles = buttonSizeStyles;
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", children, onClick, ...props }, ref) => {

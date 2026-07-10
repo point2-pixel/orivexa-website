@@ -85,6 +85,31 @@ utility classes — no inline magic numbers scattered across components.
 Dark mode is the only mode — the `dark` class is applied at the root and
 there is no light theme to maintain.
 
+## Product Demo Dashboard
+
+`/dashboard` is a fully static, frontend-only demo of the Orivexa product —
+no backend, database, or auth. It's meant for showing investors and early
+users what the workspace feels like, powered entirely by mock data in
+`lib/dashboard-data.ts`.
+
+- **`/dashboard`** — Semantic search. Type a question or click an example
+  query; a few are scripted with realistic grounded answers and citations
+  (`lib/dashboard-data.ts` → `SCRIPTED_ANSWERS`), everything else falls back
+  to a generic response so the flow never breaks.
+- **`/dashboard/graph`** — Interactive knowledge graph explorer with
+  clickable nodes and a detail panel.
+- **`/dashboard/documents`** — Filterable list of indexed sources.
+- **`/dashboard/meetings`** — AI meeting notes with summaries and action
+  items.
+- **`/dashboard/agents`** — Agent roster and a live-looking activity feed.
+- **`/dashboard/settings`** — Workspace and integration toggles (client
+  state only, nothing persists).
+
+All primary marketing-site CTAs ("Get started", "Try the live demo", pricing
+buttons) link into `/dashboard`. When you're ready to make this real, swap
+`lib/dashboard-data.ts` for actual API calls and wire up auth — the UI layer
+won't need to change.
+
 ## Content
 
 All copy lives in `lib/constants.ts`. Update company name, features,

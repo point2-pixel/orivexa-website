@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X, Sparkles, ArrowRight } from "lucide-react";
 import { NAV_LINKS, SITE_CONFIG } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/lib/utils";
 
@@ -66,10 +67,10 @@ export function Navbar() {
             >
               Sign in
             </Link>
-            <Button size="sm" className="group">
+            <ButtonLink href="/dashboard" size="sm" className="group">
               Get started
               <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-            </Button>
+            </ButtonLink>
           </div>
 
           <button
@@ -117,9 +118,9 @@ export function Navbar() {
                   >
                     Sign in
                   </Link>
-                  <Button size="md" className="w-full">
+                  <ButtonLink href="/dashboard" size="md" className="w-full" onClick={() => setMobileOpen(false)}>
                     Get started
-                  </Button>
+                  </ButtonLink>
                 </div>
               </div>
             </div>

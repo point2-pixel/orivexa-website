@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/ButtonLink";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 
 export function CTA() {
@@ -31,10 +32,10 @@ export function CTA() {
                 life in minutes. No credit card required.
               </p>
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Button size="lg" className="group">
+                <ButtonLink href="/dashboard" size="lg" className="group">
                   Start building for free
                   <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-                </Button>
+                </ButtonLink>
                 <Button variant="outline" size="lg">
                   Talk to sales
                 </Button>
