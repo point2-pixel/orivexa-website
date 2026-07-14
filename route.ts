@@ -1,85 +1,136 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { chunkText } from "@/lib/chunk-text";
-import { embedDocuments } from "@/lib/voyage";
+import { extractText, MAX_UPLOAD_BYTES, SUPPORTED_EXTENSIONS } from "@/lib/extract-text";
+import { embedAndStoreDocument } from "@/app/api/documents/embed/route";
 
+// PDF/DOCX/XLSX parsing needs Node APIs (fs, buffers) — must run on the
+// Node runtime, not the Edge runtime.
 export const runtime = "nodejs";
 
 /**
- * Chunks + embeds a single document. Call embedAndStoreDocument()
- * directly (in-process, no network hop) from
- * app/api/documents/upload/route.ts right after the new document
- * row is inserted:
- *
- *   import { embedAndStoreDocument } from "@/app/api/documents/embed/route";
- *   ...
- *   await embedAndStoreDocument(newDoc.id, user.id);
- *
- * This POST endpoint also exists standalone in case you ever need to
- * re-embed a document from the client (e.g. a "reindex" button).
+ * Supabase Storage object keys only allow a safe subset of characters.
+ * Cyrillic, spaces, and other non-ASCII characters cause an
+ * "Invalid key" error at upload time. This strips the storage key down
+ * to something safe while leaving the original filename untouched in
+ * the `title` column, so the user still sees their real filename.
  */
+function sanitizeFilename(name: string): string {
+  const dotIndex = name.lastIndexOf(".");
+  const base = dotIndex > 0 ? name.slice(0, dotIndex) : name;
+  const ext = dotIndex > 0 ? name.slice(dotIndex) : "";
+
+  const safeBase = base
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accent marks
+    .replace(/[^a-zA-Z0-9-_]+/g, "-") // anything else (incl. Cyrillic, spaces) → dash
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+
+  return (safeBase || "file") + ext.toLowerCase();
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user) {
+  if (!user || !user.workspace) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const body = await request.json().catch(() => null);
-  const documentId: string | undefined = body?.documentId;
-  if (!documentId) {
-    return NextResponse.json({ error: "documentId is required." }, { status: 400 });
+  const formData = await request.formData();
+  const file = formData.get("file");
+
+  if (!file || !(file instanceof File)) {
+    return NextResponse.json({ error: "No file provided." }, { status: 400 });
   }
 
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "File is too large. Maximum size is 15 MB." },
+      { status: 400 }
+    );
+  }
+
+  const extension = "." + (file.name.split(".").pop()?.toLowerCase() ?? "");
+  if (!SUPPORTED_EXTENSIONS.includes(extension)) {
+    return NextResponse.json(
+      {
+        error: `Unsupported file type "${extension}". Supported: ${SUPPORTED_EXTENSIONS.join(", ")}`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  let extracted;
   try {
-    const count = await embedAndStoreDocument(documentId, user.id);
-    return NextResponse.json({ chunksCreated: count });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Embedding failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    extracted = await extractText(buffer, file.type || extension);
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn't read this file. It may be corrupted or password-protected." },
+      { status: 400 }
+    );
   }
-}
 
-export async function embedAndStoreDocument(
-  documentId: string,
-  ownerId: string
-): Promise<number> {
+  if (!extracted.text) {
+    return NextResponse.json(
+      { error: "No readable text found in this file." },
+      { status: 400 }
+    );
+  }
+
   const supabase = await createClient();
 
-  const { data: doc, error: docError } = await supabase
+  // Store the original file in Storage under the user's own folder so RLS
+  // policies (see supabase/schema.sql) can enforce per-user access.
+  // The key itself is sanitized (see sanitizeFilename above); the
+  // human-readable original name is kept separately in `title` below.
+  const safeName = sanitizeFilename(file.name);
+  const storagePath = `${user.id}/${crypto.randomUUID()}-${safeName}`;
+  const { error: storageError } = await supabase.storage
     .from("documents")
-    .select("id, content, workspace_id, owner_id")
-    .eq("id", documentId)
+    .upload(storagePath, buffer, {
+      contentType: file.type || "application/octet-stream",
+    });
+
+  if (storageError) {
+    return NextResponse.json({ error: storageError.message }, { status: 500 });
+  }
+
+  const { data: doc, error: dbError } = await supabase
+    .from("documents")
+    .insert({
+      workspace_id: user.workspace.id,
+      owner_id: user.id,
+      title: file.name,
+      content: extracted.text,
+      storage_path: storagePath,
+      file_type: extension,
+    })
+    .select("id, title, file_type, created_at")
     .single();
 
-  if (docError || !doc) {
-    throw new Error(docError?.message ?? "Document not found.");
-  }
-  if (doc.owner_id !== ownerId) {
-    throw new Error("Not authorized for this document.");
+  if (dbError) {
+    return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
 
-  const chunks = chunkText(doc.content);
-  if (chunks.length === 0) return 0;
-
-  const embeddings = await embedDocuments(chunks.map((c) => c.content));
-
-  const rows = chunks.map((chunk, i) => ({
-    document_id: doc.id,
-    workspace_id: doc.workspace_id,
-    owner_id: doc.owner_id,
-    chunk_index: chunk.index,
-    content: chunk.content,
-    embedding: embeddings[i],
-  }));
-
-  // clear any previous chunks first (covers re-upload / re-embed)
-  await supabase.from("document_chunks").delete().eq("document_id", doc.id);
-
-  const { error: insertError } = await supabase.from("document_chunks").insert(rows);
-  if (insertError) {
-    throw new Error(insertError.message);
+  // Chunk + embed this document so it's immediately searchable via
+  // /api/chat's vector search. Best-effort: if embedding fails (e.g. a
+  // Voyage API hiccup), the document is still saved and can be
+  // re-embedded later — we don't want an embedding blip to make the
+  // whole upload look like it failed.
+  let embeddingError: string | null = null;
+  try {
+    await embedAndStoreDocument(doc.id, user.id);
+  } catch (err) {
+    embeddingError = err instanceof Error ? err.message : "Embedding failed.";
   }
 
-  return rows.length;
+  return NextResponse.json({
+    document: doc,
+    truncated: extracted.truncated,
+    ...(embeddingError ? { embeddingError } : {}),
+  });
 }
