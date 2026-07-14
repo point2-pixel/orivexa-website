@@ -87,3 +87,56 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ────────────────────────────────────────────────────────────
+-- 4. documents — real uploaded files, text-extracted for AI search
+-- ────────────────────────────────────────────────────────────
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references public.workspaces on delete cascade not null,
+  owner_id uuid references auth.users on delete cascade not null,
+  title text not null,
+  content text not null,
+  storage_path text,
+  file_type text,
+  created_at timestamptz default now()
+);
+
+alter table public.documents enable row level security;
+
+drop policy if exists "Users can view own documents" on public.documents;
+create policy "Users can view own documents"
+  on public.documents for select
+  using (auth.uid() = owner_id);
+
+drop policy if exists "Users can insert own documents" on public.documents;
+create policy "Users can insert own documents"
+  on public.documents for insert
+  with check (auth.uid() = owner_id);
+
+drop policy if exists "Users can delete own documents" on public.documents;
+create policy "Users can delete own documents"
+  on public.documents for delete
+  using (auth.uid() = owner_id);
+
+-- ────────────────────────────────────────────────────────────
+-- 5. Storage bucket for original uploaded files
+-- ────────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public)
+values ('documents', 'documents', false)
+on conflict (id) do nothing;
+
+drop policy if exists "Users can upload own files" on storage.objects;
+create policy "Users can upload own files"
+  on storage.objects for insert
+  with check (bucket_id = 'documents' and auth.uid()::text = (storage.foldername(name))[1]);
+
+drop policy if exists "Users can view own files" on storage.objects;
+create policy "Users can view own files"
+  on storage.objects for select
+  using (bucket_id = 'documents' and auth.uid()::text = (storage.foldername(name))[1]);
+
+drop policy if exists "Users can delete own files" on storage.objects;
+create policy "Users can delete own files"
+  on storage.objects for delete
+  using (bucket_id = 'documents' and auth.uid()::text = (storage.foldername(name))[1]);

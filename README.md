@@ -87,28 +87,73 @@ there is no light theme to maintain.
 
 ## Product Demo Dashboard
 
-`/dashboard` is a fully static, frontend-only demo of the Orivexa product —
-no backend, database, or auth. It's meant for showing investors and early
-users what the workspace feels like, powered entirely by mock data in
-`lib/dashboard-data.ts`.
+`/dashboard` is Orivexa's product workspace, gated behind real auth.
 
-- **`/dashboard`** — Semantic search. Type a question or click an example
-  query; a few are scripted with realistic grounded answers and citations
-  (`lib/dashboard-data.ts` → `SCRIPTED_ANSWERS`), everything else falls back
-  to a generic response so the flow never breaks.
+- **`/dashboard`** — Ask Orivexa. Real semantic Q&A over documents you've
+  uploaded, answered by Claude (see "Real AI Search" below).
+- **`/dashboard/documents`** — Upload real documents (.txt, .md, .csv,
+  .pdf) and manage them. This is real, not a demo.
 - **`/dashboard/graph`** — Interactive knowledge graph explorer with
-  clickable nodes and a detail panel.
-- **`/dashboard/documents`** — Filterable list of indexed sources.
+  clickable nodes and a detail panel. *(Still illustrative — not yet wired
+  to real documents.)*
 - **`/dashboard/meetings`** — AI meeting notes with summaries and action
-  items.
+  items. *(Still mock data — see `lib/dashboard-data.ts`.)*
 - **`/dashboard/agents`** — Agent roster and a live-looking activity feed.
-- **`/dashboard/settings`** — Workspace and integration toggles (client
-  state only, nothing persists).
+  *(Still mock data.)*
+- **`/dashboard/settings`** — Workspace and integration toggles. *(Client
+  state only, nothing persists yet.)*
 
 All primary marketing-site CTAs ("Get started", "Try the live demo", pricing
-buttons) link into `/dashboard`. When you're ready to make this real, swap
-`lib/dashboard-data.ts` for actual API calls and wire up auth — the UI layer
-won't need to change.
+buttons) link into `/signup`.
+
+## Real AI Search (Claude + your documents)
+
+The Search page and Documents page are backed by a real pipeline: upload a
+file, Orivexa extracts its text, and Claude answers questions grounded only
+in what you've uploaded — with sources cited.
+
+### 1. Get an Anthropic API key
+Go to [console.anthropic.com](https://console.anthropic.com) → **API Keys**
+→ create a key. Add a payment method (usage-based billing; a few dollars
+covers plenty of testing).
+
+### 2. Set the environment variable
+Add to `.env.local` (and to Vercel → Settings → Environment Variables):
+
+```
+ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+
+**Never** prefix this with `NEXT_PUBLIC_` — it must stay server-only, or
+your key would be exposed in the browser.
+
+### 3. Make sure the `documents` table and Storage bucket exist
+These are included in `supabase/schema.sql` (see the Supabase setup section
+above) — if you ran that file already, you're done. If you ran it before
+this feature was added, re-run it; every statement is safe to re-run.
+
+### How it works
+- `components/dashboard/DocumentUpload.tsx` — drag-and-drop uploader.
+- `app/api/documents/upload/route.ts` — receives the file, extracts text
+  (`lib/extract-text.ts`, using `pdf-parse` for PDFs), stores the original
+  file in Supabase Storage, and saves the extracted text in the
+  `documents` table.
+- `app/api/documents/list/route.ts` / `app/api/documents/[id]/route.ts` —
+  list and delete a user's documents.
+- `app/api/chat/route.ts` — takes a question, pulls the signed-in user's
+  documents, and asks Claude (`lib/anthropic.ts`) to answer using only
+  that content, citing which document(s) it used.
+- `components/dashboard/SearchInterface.tsx` — calls `/api/chat` and
+  renders the answer with source chips.
+
+### Current limits (good to know)
+- Each document is capped at ~120k characters and the combined context
+  sent to Claude per question is capped at ~150k characters — plenty for
+  early use, but once a workspace has many large documents you'll want to
+  add retrieval (embeddings + a vector index) instead of sending every
+  document on every question. `Voyage AI` pairs well with Claude for this
+  and is a natural next step — see the project roadmap.
+- Supported file types: `.txt`, `.md`, `.csv`, `.pdf`. Max upload size: 15 MB.
 
 ## Authentication & Backend (Supabase)
 
@@ -122,23 +167,25 @@ Go to [supabase.com](https://supabase.com) → New Project. Free tier is fine.
 
 ### 2. Run the schema
 Open **SQL Editor → New query** in your Supabase project, paste the
-contents of `supabase/schema.sql`, and run it. This creates the `profiles`
-and `workspaces` tables, Row Level Security policies, and the
-`handle_new_user` trigger that auto-provisions a workspace on signup.
+contents of `supabase/schema.sql`, and run it. This creates the `profiles`,
+`workspaces`, and `documents` tables, the `documents` Storage bucket, Row
+Level Security policies, and the `handle_new_user` trigger that
+auto-provisions a workspace on signup.
 
 ### 3. Get your API keys
 **Project Settings → API** → copy the **Project URL** and the **anon /
 public** key (sometimes labeled "publishable").
 
 ### 4. Set environment variables
-Copy `.env.local.example` to `.env.local` and fill in the two values:
+Copy `.env.local.example` to `.env.local` and fill in the values:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
 ```
 
-Add the same two variables in **Vercel → Project → Settings → Environment
+Add the same variables in **Vercel → Project → Settings → Environment
 Variables** for production, then redeploy.
 
 ### 5. (Optional) Disable email confirmation for faster testing
@@ -158,10 +205,9 @@ can sign in. To skip this during development: **Authentication → Providers
   `SignOutButton`.
 - `app/auth/confirm/route.ts` — handles the email confirmation link.
 
-The dashboard's actual content (search results, documents, meetings,
-agents) is still mock data from `lib/dashboard-data.ts` — auth is real, the
-product data isn't yet. Swap that file for real queries against your own
-tables when you're ready.
+The Knowledge Graph, Meetings, and Agents pages are still mock data from
+`lib/dashboard-data.ts` — Search and Documents are real. Swap the rest for
+real queries against your own tables as you build out the roadmap.
 
 ## Content
 

@@ -1,53 +1,59 @@
 "use client";
 
-import { useState, useRef, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Search, Sparkles, ArrowRight, RotateCcw } from "lucide-react";
-import {
-  SOURCE_DOCS,
-  SCRIPTED_ANSWERS,
-  EXAMPLE_QUERIES,
-  type SourceDoc,
-} from "@/lib/dashboard-data";
-import { SourceCard } from "@/components/dashboard/SourceCard";
+import { Search, Sparkles, ArrowRight, RotateCcw, FileText, AlertCircle } from "lucide-react";
 
-type Status = "idle" | "thinking" | "answered";
+type Status = "idle" | "thinking" | "answered" | "error";
 
-const FALLBACK_ANSWER =
-  "Orivexa found related context across your workspace, but this demo only scripts a few sample questions. Try one of the example queries below to see a full grounded answer with citations.";
-
-function findAnswer(query: string) {
-  const lower = query.toLowerCase();
-  const match = SCRIPTED_ANSWERS.find((entry) =>
-    entry.keywords.some((k) => lower.includes(k))
-  );
-  if (!match) {
-    return { answer: FALLBACK_ANSWER, sources: SOURCE_DOCS.slice(0, 3) };
-  }
-  const sources = match.sourceIds
-    .map((id) => SOURCE_DOCS.find((d) => d.id === id))
-    .filter(Boolean) as SourceDoc[];
-  return { answer: match.answer, sources };
+interface SourceRef {
+  id: string;
+  title: string;
 }
+
+const EXAMPLE_QUERIES = [
+  "Summarize this document",
+  "What are the key points?",
+  "Are there any risks or open questions mentioned?",
+  "What decisions were made?",
+];
 
 export function SearchInterface() {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [status, setStatus] = useState<Status>("idle");
-  const [result, setResult] = useState<{ answer: string; sources: SourceDoc[] } | null>(null);
-  const thinkingTimeout = useRef<number | null>(null);
+  const [answer, setAnswer] = useState("");
+  const [sources, setSources] = useState<SourceRef[]>([]);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const runSearch = (q: string) => {
+  const runSearch = async (q: string) => {
     if (!q.trim()) return;
     setSubmittedQuery(q);
     setStatus("thinking");
-    setResult(null);
+    setAnswer("");
+    setSources([]);
 
-    if (thinkingTimeout.current) window.clearTimeout(thinkingTimeout.current);
-    thinkingTimeout.current = window.setTimeout(() => {
-      setResult(findAnswer(q));
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.error || "Something went wrong. Please try again.");
+        setStatus("error");
+        return;
+      }
+
+      setAnswer(data.answer);
+      setSources(data.sources ?? []);
       setStatus("answered");
-    }, 1100);
+    } catch {
+      setErrorMessage("Couldn't reach the server. Check your connection and try again.");
+      setStatus("error");
+    }
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -57,7 +63,8 @@ export function SearchInterface() {
 
   const reset = () => {
     setStatus("idle");
-    setResult(null);
+    setAnswer("");
+    setSources([]);
     setQuery("");
     setSubmittedQuery("");
   };
@@ -78,11 +85,11 @@ export function SearchInterface() {
               Ask Orivexa
             </span>
             <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white md:text-4xl">
-              Ask anything about your company
+              Ask anything about your documents
             </h1>
             <p className="mx-auto mt-4 max-w-lg text-muted">
-              Semantic search reads intent, not keywords, and grounds every
-              answer in a source you can open.
+              Upload documents on the Documents page, then ask questions here —
+              answers are grounded in what you uploaded, with sources cited.
             </p>
           </motion.div>
         )}
@@ -94,7 +101,7 @@ export function SearchInterface() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask a question about meetings, docs, code, or decisions…"
+            placeholder="Ask a question about your uploaded documents…"
             className="w-full bg-transparent text-sm text-white placeholder:text-muted-2 focus:outline-none md:text-base"
           />
           <button
@@ -150,7 +157,7 @@ export function SearchInterface() {
                 <div className="flex items-center gap-3 text-sm text-muted">
                   <Sparkles className="h-4 w-4 animate-pulse text-accent" />
                   <span className="flex items-center gap-1">
-                    Reading the graph
+                    Reading your documents
                     <span className="inline-flex gap-0.5">
                       <span className="h-1 w-1 animate-pulse-glow rounded-full bg-accent [animation-delay:0s]" />
                       <span className="h-1 w-1 animate-pulse-glow rounded-full bg-accent [animation-delay:0.15s]" />
@@ -160,19 +167,26 @@ export function SearchInterface() {
                 </div>
               )}
 
-              {status === "answered" && result && (
+              {status === "error" && (
+                <div className="flex items-start gap-2.5 text-sm text-red-300">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  {errorMessage}
+                </div>
+              )}
+
+              {status === "answered" && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.4 }}
-                  className="text-[15px] leading-relaxed text-white/90"
+                  className="whitespace-pre-line text-[15px] leading-relaxed text-white/90"
                 >
-                  {result.answer}
+                  {answer}
                 </motion.p>
               )}
             </div>
 
-            {status === "answered" && result && (
+            {status === "answered" && sources.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -180,11 +194,17 @@ export function SearchInterface() {
                 className="mt-8"
               >
                 <h3 className="text-xs font-medium uppercase tracking-wider text-muted-2">
-                  Sources ({result.sources.length})
+                  Sources ({sources.length})
                 </h3>
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {result.sources.map((doc) => (
-                    <SourceCard key={doc.id} doc={doc} />
+                <div className="mt-4 flex flex-wrap gap-2.5">
+                  {sources.map((doc) => (
+                    <span
+                      key={doc.id}
+                      className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3.5 py-2 text-sm text-white/85"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-accent" />
+                      {doc.title}
+                    </span>
                   ))}
                 </div>
               </motion.div>
