@@ -2,12 +2,6 @@ import { createClient } from "@/lib/supabase/server";
 import { chunkText } from "@/lib/chunk-text";
 import { embedDocuments } from "@/lib/voyage";
 
-/**
- * Chunks + embeds a single document, storing the results in
- * document_chunks. Lives in lib/ (not app/api/.../route.ts) because
- * Next.js route files may only export HTTP handlers (GET, POST, etc.)
- * — any other export, like this function, breaks the build.
- */
 export async function embedAndStoreDocument(
   documentId: string,
   ownerId: string
@@ -41,7 +35,6 @@ export async function embedAndStoreDocument(
     embedding: embeddings[i],
   }));
 
-  // clear any previous chunks first (covers re-upload / re-embed)
   await supabase.from("document_chunks").delete().eq("document_id", doc.id);
 
   const { error: insertError } = await supabase.from("document_chunks").insert(rows);

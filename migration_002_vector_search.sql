@@ -3,9 +3,6 @@
 
 create extension if not exists vector;
 
--- ────────────────────────────────────────────────────────────
--- document_chunks — one row per chunk, with its embedding
--- ────────────────────────────────────────────────────────────
 create table if not exists public.document_chunks (
   id uuid primary key default gen_random_uuid(),
   document_id uuid references public.documents(id) on delete cascade not null,
@@ -41,12 +38,6 @@ create policy "Users can delete own chunks"
   on public.document_chunks for delete
   using (auth.uid() = owner_id);
 
--- ────────────────────────────────────────────────────────────
--- match_document_chunks — top-K similarity search, scoped to one owner
--- security definer so it can query across RLS efficiently, but the
--- match_owner_id filter is what actually enforces per-user isolation —
--- always pass the authenticated user's own id, never trust client input.
--- ────────────────────────────────────────────────────────────
 create or replace function public.match_document_chunks(
   query_embedding vector(1024),
   match_owner_id uuid,

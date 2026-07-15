@@ -2,19 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { extractText, MAX_UPLOAD_BYTES, SUPPORTED_EXTENSIONS } from "@/lib/extract-text";
-import { embedAndStoreDocument } from "@/app/api/documents/embed/route";
+import { embedAndStoreDocument } from "@/lib/embed-document";
 
-// PDF/DOCX/XLSX parsing needs Node APIs (fs, buffers) — must run on the
-// Node runtime, not the Edge runtime.
 export const runtime = "nodejs";
 
-/**
- * Supabase Storage object keys only allow a safe subset of characters.
- * Cyrillic, spaces, and other non-ASCII characters cause an
- * "Invalid key" error at upload time. This strips the storage key down
- * to something safe while leaving the original filename untouched in
- * the `title` column, so the user still sees their real filename.
- */
 function sanitizeFilename(name: string): string {
   const dotIndex = name.lastIndexOf(".");
   const base = dotIndex > 0 ? name.slice(0, dotIndex) : name;
@@ -22,8 +13,8 @@ function sanitizeFilename(name: string): string {
 
   const safeBase = base
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "") // strip accent marks
-    .replace(/[^a-zA-Z0-9-_]+/g, "-") // anything else (incl. Cyrillic, spaces) → dash
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 80);
@@ -83,10 +74,6 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
 
-  // Store the original file in Storage under the user's own folder so RLS
-  // policies (see supabase/schema.sql) can enforce per-user access.
-  // The key itself is sanitized (see sanitizeFilename above); the
-  // human-readable original name is kept separately in `title` below.
   const safeName = sanitizeFilename(file.name);
   const storagePath = `${user.id}/${crypto.randomUUID()}-${safeName}`;
   const { error: storageError } = await supabase.storage
@@ -116,11 +103,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: dbError.message }, { status: 500 });
   }
 
-  // Chunk + embed this document so it's immediately searchable via
-  // /api/chat's vector search. Best-effort: if embedding fails (e.g. a
-  // Voyage API hiccup), the document is still saved and can be
-  // re-embedded later — we don't want an embedding blip to make the
-  // whole upload look like it failed.
   let embeddingError: string | null = null;
   try {
     await embedAndStoreDocument(doc.id, user.id);
