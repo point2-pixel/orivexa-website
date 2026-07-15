@@ -3,12 +3,6 @@ export interface TextChunk {
   content: string;
 }
 
-/**
- * Splits text into overlapping chunks by character count.
- * ~1000 chars ≈ 200-250 tokens: small enough for precise retrieval,
- * large enough to stay coherent. 150-char overlap avoids losing
- * meaning when a sentence gets cut at a chunk boundary.
- */
 export function chunkText(
   text: string,
   chunkSize = 1000,
