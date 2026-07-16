@@ -135,7 +135,8 @@ this feature was added, re-run it; every statement is safe to re-run.
 ### How it works
 - `components/dashboard/DocumentUpload.tsx` — drag-and-drop uploader.
 - `app/api/documents/upload/route.ts` — receives the file, extracts text
-  (`lib/extract-text.ts`, using `pdf-parse` for PDFs), stores the original
+  (`lib/extract-text.ts`, using `pdf-parse` for PDFs and `mammoth` for
+  `.docx`), stores the original
   file in Supabase Storage, and saves the extracted text in the
   `documents` table.
 - `app/api/documents/list/route.ts` / `app/api/documents/[id]/route.ts` —
@@ -153,7 +154,7 @@ this feature was added, re-run it; every statement is safe to re-run.
   add retrieval (embeddings + a vector index) instead of sending every
   document on every question. `Voyage AI` pairs well with Claude for this
   and is a natural next step — see the project roadmap.
-- Supported file types: `.txt`, `.md`, `.csv`, `.pdf`. Max upload size: 15 MB.
+- Supported file types: `.txt`, `.md`, `.csv`, `.pdf`, `.docx`. Max upload size: 15 MB.
 
 ## Authentication & Backend (Supabase)
 

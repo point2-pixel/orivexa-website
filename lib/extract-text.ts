@@ -30,10 +30,19 @@ export async function extractText(
     return truncate(data.text);
   }
 
+  if (
+    type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    type.endsWith(".docx")
+  ) {
+    const mammoth = await import("mammoth");
+    const { value } = await mammoth.extractRawText({ buffer });
+    return truncate(value);
+  }
+
   // Plain text, markdown, csv, and anything else we don't have a special
   // parser for yet — treat as UTF-8 text.
   return truncate(buffer.toString("utf-8"));
 }
 
-export const SUPPORTED_EXTENSIONS = [".txt", ".md", ".csv", ".pdf"];
+export const SUPPORTED_EXTENSIONS = [".txt", ".md", ".csv", ".pdf", ".docx"];
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
