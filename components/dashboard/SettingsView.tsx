@@ -53,6 +53,7 @@ export function SettingsView() {
         <h2 className="text-sm font-semibold text-white">Connected sources</h2>
         <p className="mt-1 text-xs text-muted-2">
           Toggle which tools Orivexa indexes into your knowledge graph.
+          <span className="ml-1 text-amber-300/70">(Preview — real integrations coming soon.)</span>
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {INTEGRATIONS.map((name) => {
@@ -90,10 +91,28 @@ export function SettingsView() {
             <div className="text-sm text-white">Growth plan</div>
             <div className="text-xs text-muted-2">$49 per seat / month · billed monthly</div>
           </div>
-          <button className="rounded-lg border border-white/15 px-4 py-2 text-xs text-white transition-colors hover:border-accent/40">
-            Manage billing
+          <button
+            disabled
+            title="Billing isn't connected yet — coming soon"
+            className="cursor-not-allowed rounded-lg border border-white/10 px-4 py-2 text-xs text-muted-2 opacity-60"
+          >
+            Manage billing (soon)
           </button>
         </div>
+      </section>
+
+      <section className="mt-6 rounded-xl border border-white/[0.07] bg-white/[0.02] p-6">
+        <h2 className="text-sm font-semibold text-white">Danger zone</h2>
+        <p className="mt-1 text-xs text-muted-2">
+          Deleting your workspace is permanent and cannot be undone.
+        </p>
+        <button
+          disabled
+          title="Coming soon"
+          className="mt-4 cursor-not-allowed rounded-lg border border-red-500/20 px-4 py-2 text-xs text-red-400/60"
+        >
+          Delete workspace (soon)
+        </button>
       </section>
     </div>
   );

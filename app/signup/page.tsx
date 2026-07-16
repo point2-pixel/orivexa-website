@@ -15,11 +15,11 @@ export default function SignupPage() {
       footer={
         <>
           By signing up you agree to our{" "}
-          <Link href="#" className="text-white hover:text-accent">
+          <Link href="/terms" className="text-white hover:text-accent">
             Terms
           </Link>{" "}
           and{" "}
-          <Link href="#" className="text-white hover:text-accent">
+          <Link href="/privacy" className="text-white hover:text-accent">
             Privacy Policy
           </Link>
           .

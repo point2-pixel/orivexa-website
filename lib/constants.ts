@@ -3,13 +3,9 @@ export const SITE_CONFIG = {
   tagline: "Turn Company Knowledge Into Intelligence",
   description:
     "Orivexa AI is an AI workspace that doesn't just answer questions—it builds an evolving knowledge graph of your company. Every meeting, document, design, line of code, and decision becomes connected, searchable, and actionable.",
-  url: "https://orivexa.ai",
+  url: "https://orivexia.space",
   ogImage: "/og-image.png",
-  links: {
-    twitter: "https://twitter.com/orivexaai",
-    github: "https://github.com/orivexaai",
-    linkedin: "https://linkedin.com/company/orivexaai",
-  },
+  contactEmail: "hello@orivexia.space",
 };
 
 export const NAV_LINKS = [
@@ -300,22 +296,11 @@ export const FOOTER_LINKS = {
     { label: "Integrations", href: "#integrations" },
     { label: "Pricing", href: "#pricing" },
   ],
-  Company: [
-    { label: "About", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Blog", href: "#" },
-    { label: "Press", href: "#" },
-  ],
-  Resources: [
-    { label: "Documentation", href: "#" },
-    { label: "API Reference", href: "#" },
-    { label: "Changelog", href: "#" },
-    { label: "Status", href: "#" },
-  ],
+  Company: [{ label: "Contact us", href: "mailto:hello@orivexia.space" }],
   Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
     { label: "Security", href: "#security" },
-    { label: "Cookie Policy", href: "#" },
+    { label: "Cookie Policy", href: "/privacy#cookies" },
   ],
 };

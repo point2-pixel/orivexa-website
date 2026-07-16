@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Sparkles, Twitter, Github, Linkedin } from "lucide-react";
+import { Sparkles, Mail } from "lucide-react";
 import { FOOTER_LINKS, SITE_CONFIG } from "@/lib/constants";
 import { Container } from "@/components/ui/Container";
 
@@ -8,8 +8,8 @@ export function Footer() {
     <footer className="relative border-t border-white/[0.07] pt-20">
       <Container>
         <div className="grid grid-cols-2 gap-10 pb-16 sm:grid-cols-3 lg:grid-cols-6">
-          <div className="col-span-2 sm:col-span-3 lg:col-span-2">
-            <Link href="#" className="flex items-center gap-2.5">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-3">
+            <Link href="/" className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent">
                 <Sparkles className="h-4 w-4 text-white" strokeWidth={2.5} />
               </span>
@@ -20,22 +20,13 @@ export function Footer() {
               meeting, document, and decision your company makes.
             </p>
             <div className="mt-6 flex items-center gap-3">
-              {[
-                { icon: Twitter, href: SITE_CONFIG.links.twitter, label: "Twitter" },
-                { icon: Github, href: SITE_CONFIG.links.github, label: "GitHub" },
-                { icon: Linkedin, href: SITE_CONFIG.links.linkedin, label: "LinkedIn" },
-              ].map((social) => (
-                <a
-                  key={social.label}
-                  href={social.href}
-                  aria-label={social.label}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-muted transition-colors hover:border-accent/40 hover:text-accent"
-                >
-                  <social.icon className="h-4 w-4" />
-                </a>
-              ))}
+              <a
+                href={`mailto:${SITE_CONFIG.contactEmail}`}
+                aria-label="Email Orivexa AI"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-muted transition-colors hover:border-accent/40 hover:text-accent"
+              >
+                <Mail className="h-4 w-4" />
+              </a>
             </div>
           </div>
 

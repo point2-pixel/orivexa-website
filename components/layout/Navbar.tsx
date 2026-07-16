@@ -39,7 +39,7 @@ export function Navbar() {
               : "bg-transparent px-5 py-3"
           )}
         >
-          <Link href="#" className="group flex items-center gap-2.5" aria-label={`${SITE_CONFIG.name} home`}>
+          <Link href="/" className="group flex items-center gap-2.5" aria-label={`${SITE_CONFIG.name} home`}>
             <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent shadow-glow-sm">
               <Sparkles className="h-4 w-4 text-white" strokeWidth={2.5} />
             </span>
