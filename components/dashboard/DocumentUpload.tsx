@@ -75,12 +75,12 @@ export function DocumentUpload({ onUploaded }: DocumentUploadProps) {
           <p className="text-sm text-white">
             {uploading ? "Uploading and reading document…" : "Drop a file here, or click to browse"}
           </p>
-          <p className="mt-1 text-xs text-muted-2">.txt, .md, .csv, .pdf, .docx — up to 15 MB</p>
+          <p className="mt-1 text-xs text-muted-2">.txt, .md, .csv, .pdf — up to 15 MB</p>
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept=".txt,.md,.csv,.pdf,.docx"
+          accept=".txt,.md,.csv,.pdf"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
