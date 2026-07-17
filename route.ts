@@ -1,118 +1,78 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { extractText, MAX_UPLOAD_BYTES, SUPPORTED_EXTENSIONS } from "@/lib/extract-text";
-import { embedAndStoreDocument } from "@/lib/embed-document";
+import { createAnthropicClient, CLAUDE_MODEL } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
 
-function sanitizeFilename(name: string): string {
-  const dotIndex = name.lastIndexOf(".");
-  const base = dotIndex > 0 ? name.slice(0, dotIndex) : name;
-  const ext = dotIndex > 0 ? name.slice(dotIndex) : "";
-
-  const safeBase = base
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9-_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 80);
-
-  return (safeBase || "file") + ext.toLowerCase();
+/** Concatenates every text block in order — with tool use (web search),
+ * Claude can return several text segments interleaved with tool calls. */
+function extractPlainText(content: Array<{ type: string; text?: string }>): string {
+  return content
+    .filter((block): block is { type: string; text: string } => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n\n")
+    .trim();
 }
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user || !user.workspace) {
+  if (!user) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file");
+  const body = await request.json().catch(() => null);
+  const companyName: string | undefined = body?.companyName;
+  const competitorName: string | undefined = body?.competitorName;
+  const question: string | undefined = body?.question; // optional extra context
 
-  if (!file || !(file instanceof File)) {
-    return NextResponse.json({ error: "No file provided." }, { status: 400 });
-  }
-
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (!companyName || !competitorName) {
     return NextResponse.json(
-      { error: "File is too large. Maximum size is 15 MB." },
+      { error: "companyName and competitorName are required." },
       { status: 400 }
     );
   }
 
-  const extension = "." + (file.name.split(".").pop()?.toLowerCase() ?? "");
-  if (!SUPPORTED_EXTENSIONS.includes(extension)) {
-    return NextResponse.json(
-      {
-        error: `Unsupported file type "${extension}". Supported: ${SUPPORTED_EXTENSIONS.join(", ")}`,
-      },
-      { status: 400 }
-    );
-  }
+  const anthropic = createAnthropicClient();
 
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  const systemPrompt = `You are Orivexa AI's Competitor Watch assistant. The user runs "${companyName}" and wants to know what their competitor "${competitorName}" has recently been doing — marketing campaigns, promotions, product launches, or pricing moves — and get strategic response ideas.
 
-  let extracted;
+Search the web for ${competitorName}'s recent activity (prioritize the last 30-60 days; if nothing recent turns up, say so honestly instead of inventing anything).
+
+Respond in exactly this format, with no text outside the tags:
+<findings>
+A concise summary (3-6 sentences) of what you found about ${competitorName}'s recent activity. If you found nothing recent or relevant, say so plainly.
+</findings>
+<options>
+2-3 short, concrete strategic response ideas for ${companyName}, each on its own line starting with a dash. Frame these as suggestions to consider, not guaranteed solutions — you don't have full visibility into ${companyName}'s budget, brand, or strategy.
+</options>`;
+
+  const userMessage = question?.trim()
+    ? question.trim()
+    : `What has ${competitorName} been doing recently, and how should we respond?`;
+
   try {
-    extracted = await extractText(buffer, file.type || extension);
-  } catch {
-    return NextResponse.json(
-      { error: "Couldn't read this file. It may be corrupted or password-protected." },
-      { status: 400 }
-    );
-  }
-
-  if (!extracted.text) {
-    return NextResponse.json(
-      { error: "No readable text found in this file." },
-      { status: 400 }
-    );
-  }
-
-  const supabase = await createClient();
-
-  const safeName = sanitizeFilename(file.name);
-  const storagePath = `${user.id}/${crypto.randomUUID()}-${safeName}`;
-  const { error: storageError } = await supabase.storage
-    .from("documents")
-    .upload(storagePath, buffer, {
-      contentType: file.type || "application/octet-stream",
+    const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1200,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
     });
 
-  if (storageError) {
-    return NextResponse.json({ error: storageError.message }, { status: 500 });
-  }
+    const raw = extractPlainText(message.content);
+    const findingsMatch = raw.match(/<findings>([\s\S]*?)<\/findings>/i);
+    const optionsMatch = raw.match(/<options>([\s\S]*?)<\/options>/i);
 
-  const { data: doc, error: dbError } = await supabase
-    .from("documents")
-    .insert({
-      workspace_id: user.workspace.id,
-      owner_id: user.id,
-      title: file.name,
-      content: extracted.text,
-      storage_path: storagePath,
-      file_type: extension,
-    })
-    .select("id, title, file_type, created_at")
-    .single();
+    const findings = findingsMatch ? findingsMatch[1].trim() : raw.trim();
+    const optionsRaw = optionsMatch ? optionsMatch[1].trim() : "";
+    const options = optionsRaw
+      .split("\n")
+      .map((line) => line.replace(/^-+\s*/, "").trim())
+      .filter(Boolean);
 
-  if (dbError) {
-    return NextResponse.json({ error: dbError.message }, { status: 500 });
-  }
-
-  let embeddingError: string | null = null;
-  try {
-    await embedAndStoreDocument(doc.id, user.id);
+    return NextResponse.json({ findings, options });
   } catch (err) {
-    embeddingError = err instanceof Error ? err.message : "Embedding failed.";
+    const message = err instanceof Error ? err.message : "Something went wrong.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({
-    document: doc,
-    truncated: extracted.truncated,
-    ...(embeddingError ? { embeddingError } : {}),
-  });
 }
