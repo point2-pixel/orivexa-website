@@ -2,44 +2,43 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { createAnthropicClient, CLAUDE_MODEL } from "@/lib/anthropic";
+import { embedQuery } from "@/lib/voyage";
 
 export const runtime = "nodejs";
 
-const MAX_CONTEXT_CHARS = 150_000; // keeps combined documents well within Claude's context window
+const MATCH_COUNT = 8;
+const MAX_HISTORY_TURNS = 10;
 
-interface DocRow {
+interface ChunkMatch {
   id: string;
-  title: string;
+  document_id: string;
+  content: string;
+  similarity: number;
+}
+
+interface HistoryTurn {
+  role: "user" | "assistant";
   content: string;
 }
 
-function buildDocumentsBlock(docs: DocRow[]): string {
-  let used = 0;
-  const parts: string[] = [];
-
-  for (const doc of docs) {
-    if (used >= MAX_CONTEXT_CHARS) break;
-    const remaining = MAX_CONTEXT_CHARS - used;
-    const content = doc.content.slice(0, remaining);
-    parts.push(`[Document: ${doc.title}]\n${content}`);
-    used += content.length;
-  }
-
-  return parts.join("\n\n---\n\n");
-}
-
-function parseResponse(raw: string): { answer: string; sourceTitles: string[] } {
+function parseTaggedResponse(raw: string): { answer: string; sourceTitles: string[] } {
   const answerMatch = raw.match(/<answer>([\s\S]*?)<\/answer>/i);
   const sourcesMatch = raw.match(/<sources>([\s\S]*?)<\/sources>/i);
-
   const answer = answerMatch ? answerMatch[1].trim() : raw.trim();
   const sourcesRaw = sourcesMatch ? sourcesMatch[1].trim() : "";
   const sourceTitles =
     sourcesRaw && sourcesRaw.toLowerCase() !== "none"
       ? sourcesRaw.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
-
   return { answer, sourceTitles };
+}
+
+function extractPlainText(content: Array<{ type: string; text?: string }>): string {
+  return content
+    .filter((block): block is { type: string; text: string } => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n\n")
+    .trim();
 }
 
 export async function POST(request: Request) {
@@ -50,67 +49,98 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const query: string | undefined = body?.query;
+  const rawHistory: HistoryTurn[] = Array.isArray(body?.history) ? body.history : [];
 
   if (!query || !query.trim()) {
     return NextResponse.json({ error: "Question is required." }, { status: 400 });
   }
 
+  const history = rawHistory
+    .filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
+    .slice(-MAX_HISTORY_TURNS);
+
   const supabase = await createClient();
-  const { data: docs, error } = await supabase
+
+  const { count: docCount } = await supabase
     .from("documents")
-    .select("id, title, content")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false });
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  let chunks: ChunkMatch[] = [];
+  let titleById = new Map<string, string>();
+
+  if (docCount && docCount > 0) {
+    let queryEmbedding: number[] | null = null;
+    try {
+      queryEmbedding = await embedQuery(query);
+    } catch {
+      queryEmbedding = null;
+    }
+
+    if (queryEmbedding) {
+      const { data: matches } = await supabase.rpc("match_document_chunks", {
+        query_embedding: queryEmbedding,
+        match_owner_id: user.id,
+        match_count: MATCH_COUNT,
+      });
+      chunks = (matches ?? []) as ChunkMatch[];
+
+      if (chunks.length > 0) {
+        const docIds = [...new Set(chunks.map((c) => c.document_id))];
+        const { data: docs } = await supabase.from("documents").select("id, title").in("id", docIds);
+        titleById = new Map((docs ?? []).map((d) => [d.id, d.title as string]));
+      }
+    }
   }
 
-  if (!docs || docs.length === 0) {
-    return NextResponse.json({
-      answer:
-        "You haven't uploaded any documents yet. Upload a document on the Documents page, then ask me anything about it.",
-      sources: [],
-    });
-  }
+  const anthropic = createAnthropicClient();
+  const historyMessages = history.map((h) => ({ role: h.role, content: h.content }));
 
-  const documentsBlock = buildDocumentsBlock(docs as DocRow[]);
+  if (chunks.length > 0) {
+    const contextBlock = chunks
+      .map((c) => `[Document: ${titleById.get(c.document_id) ?? "Untitled"}]\n${c.content}`)
+      .join("\n\n---\n\n");
 
-  const systemPrompt = `You are Orivexa AI's assistant. Answer the user's question using ONLY the information in the documents provided below. If the documents don't contain enough information to answer, say so honestly instead of guessing.
+    const systemPrompt = `You are Orivexa AI's assistant, having an ongoing conversation with the user about their uploaded documents. Answer using ONLY the information in the excerpts below (plus the conversation so far for context). These are the most relevant passages retrieved for the LATEST question — they may not cover everything, so say so honestly instead of guessing if they don't.
 
 Respond in exactly this format, with no text outside the tags:
 <answer>
-Your answer in plain, concise prose.
+Your answer in plain, concise prose. You may reference earlier parts of the conversation naturally.
 </answer>
 <sources>
-Comma-separated exact titles of the documents you actually used, or "none" if you couldn't answer from them.
+Comma-separated exact document titles you actually used for THIS answer, or "none" if you couldn't answer from them.
 </sources>
 
-Documents:
+Retrieved excerpts for the latest question:
 ---
-${documentsBlock}
+${contextBlock}
 ---`;
 
-  try {
-    const anthropic = createAnthropicClient();
-    const message = await anthropic.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: "user", content: query }],
-    });
+    try {
+      const message = await anthropic.messages.create({
+        model: CLAUDE_MODEL,
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [...historyMessages, { role: "user", content: query }],
+      });
 
-    const textBlock = message.content.find((block) => block.type === "text");
-    const raw = textBlock && "text" in textBlock ? textBlock.text : "";
-    const { answer, sourceTitles } = parseResponse(raw);
+      const raw = extractPlainText(message.content);
+      const { answer, sourceTitles } = parseTaggedResponse(raw);
+      const sources = [...titleById.entries()]
+        .filter(([, title]) => sourceTitles.includes(title))
+        .map(([id, title]) => ({ id, title }));
 
-    const sources = (docs as DocRow[])
-      .filter((d) => sourceTitles.includes(d.title))
-      .map((d) => ({ id: d.id, title: d.title }));
-
-    return NextResponse.json({ answer, sources });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Something went wrong.";
-    return NextResponse.json({ error: message }, { status: 500 });
+      return NextResponse.json({ answer, sources, mode: "documents" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
-}
+
+  const noDocsAtAll = !docCount || docCount === 0;
+  const systemPrompt = noDocsAtAll
+    ? `You are Orivexa AI's assistant. The user hasn't uploaded any documents yet, so answer their question using web search and your own knowledge. Be clear and helpful, and briefly mention this answer isn't based on any of their documents (since they haven't uploaded any yet).`
+    : `You are Orivexa AI's assistant. Nothing in the user's uploaded documents was relevant to this specific question, so answer using web search and your own knowledge instead. Briefly mention that this particular answer isn't based on their documents.`;
+
+  try {
+    const message = await anthropic.messages.create({
