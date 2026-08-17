@@ -144,3 +144,17 @@ ${contextBlock}
 
   try {
     const message = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 1500,
+      system: systemPrompt,
+      messages: [...historyMessages, { role: "user", content: query }],
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
+    });
+
+    const answer = extractPlainText(message.content);
+    return NextResponse.json({ answer, sources: [], mode: "web" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Something went wrong.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
